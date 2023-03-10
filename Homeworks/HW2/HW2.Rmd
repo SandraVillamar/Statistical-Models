@@ -1,0 +1,323 @@
+---
+title: "HW2"
+author: Sandra Villamar and Shobhit Dronamraju
+output: pdf_document
+date: "2023-01-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Problem 1A
+
+```{r}
+library(hexbin)
+library(gridExtra)   
+library(grid)
+library(MASS)
+library(car)
+```
+
+```{r}
+ns = c(50, 100, 200, 500)  # sample sizes
+N = 1000  # trials
+coefs = array(data = NA, dim = c(length(ns), N, 2))  # store intercept, slope
+
+for(i in 1:length(ns)){
+  n = ns[i]
+  for(j in 1:N){
+    x = runif(n, -1, 1)
+    y = 1 + 2*x + rnorm(n, 0, 0.5)
+    fit = lm(y ~ x)
+    coefs[i, j,] = fit$coefficients
+  }
+}
+```
+
+```{r}
+# intercepts marginally normal
+par(mfrow=c(2,2))
+for(i in 1:length(ns)){
+  hist(coefs[i,,1], main=sprintf("n = %i", ns[i]), xlab="intercept")
+}
+mtext("Intercepts are Marginally Normal",                   
+      side = 3,
+      line = -1,
+      outer = TRUE)
+```
+
+```{r}
+# slopes marginally normal
+par(mfrow=c(2,2))
+for(i in 1:length(ns)){
+  hist(coefs[i,,2], main=sprintf("n = %i", ns[i]), xlab="slope")
+}
+mtext("Slopes are Marginally Normal",                   
+      side = 3,
+      line = -1,
+      outer = TRUE)
+```
+
+```{r}
+# jointly normal
+
+# hexbin
+plotList <- lapply(1:length(ns), function(i) {
+  intercept = coefs[i,,1]  
+  slope = coefs[i,,2] 
+  hexbinplot(slope ~ intercept, main=sprintf("n = %i", ns[i]), xlab="intercept", ylab="slope")
+})
+
+do.call(grid.arrange, c(plotList, ncol=2))
+
+# plot level lines
+par(mfrow=c(2,2))
+for(i in 1:length(ns)){
+  kde = kde2d(coefs[i, , 1], coefs[i, , 2])
+  contour(kde, main = sprintf("n = %i", ns[i]), xlab = "intercept", ylab = "slope")
+}
+```
+
+From the plots above, we can clearly see that the slope and intercept histograms display a normal distribution, and thus are both marginally normal. From the level lines plot, we see that the slope and intercept are jointly normal because each plot has an ellipse shape with the highest level line value at the center and decreasing level lines as points are farther away from the center.
+
+### Problem 1B
+
+```{r}
+ks = c(2, 5, 10, 20, 50)
+coefs2 = array(data = NA, dim = c(length(ks), length(ns), N, 2))
+
+for(h in 1:length(ks)){
+  k = ks[h]
+  
+  for(i in 1:length(ns)){
+    n = ns[i]
+    
+    for(j in 1:N){
+      x = runif(n, -1, 1)
+      y = 1 + 2*x + rt(n, df=k)
+      fit = lm(y ~ x)
+      coefs2[h, i, j,] = fit$coefficients
+    }
+  }
+}
+```
+
+```{r}
+# intercepts
+for(h in 1:length(ks)){
+  par(mfrow=c(2,2))
+  for(i in 1:length(ns)){
+    hist(coefs2[h, i, ,1], main=sprintf("n = %i", ns[i]), xlab="intercept")
+  }
+  mtext(sprintf("k = %i", ks[h]),                   
+        side = 3,
+        line = -1,
+        outer = TRUE)
+}
+```
+
+```{r}
+# slopes
+for(h in 1:length(ks)){
+  par(mfrow=c(2,2))
+  for(i in 1:length(ns)){
+    hist(coefs2[h, i, ,2], main=sprintf("n = %i", ns[i]), xlab="slope")
+  }
+  mtext(sprintf("k = %i", ks[h]),                   
+        side = 3,
+        line = -1,
+        outer = TRUE)
+}
+```
+
+```{r}
+# jointly normal: plot level lines
+
+par(mfrow=c(2,2))
+for(h in 1:length(ks)){
+  for(i in 1:length(ns)){
+    kde = kde2d(coefs2[h, i, , 1], coefs2[h, i, ,2])
+    contour(kde, main = sprintf("k = %i, n = %i", ks[h], ns[i]), 
+            xlab = "intercept", ylab = "slope")
+  }
+}
+```
+
+#### Comments:
+
+We notice that for $k = 2$ degrees of freedom, the marginal distributions for intercept and slope are densely clustered around one value (creating one sort of spike). For higher values of $k$, the distribution starts to spread out and looks like a normal distribution as we saw in Problem 1A.
+
+From the plotted level lines of the joint distribution between slope and intercept, we see that the joint distribution is normal. We make this conclusion because for each of the plots, there is an ellipse shape with a higher level line in the center and declining values as points are farther away from the center.
+
+### Problem 2A
+
+```{r}
+# predict medv without discrete variables
+fit = lm(medv ~ . - chas - rad, data = Boston)
+```
+
+```{r}
+# assumption: mean zero, model accuracy
+plot(fit, which=1, pch=16)# residuals vs. fitted values
+residualPlots(fit)  # partial residual: looking at one variable
+avPlots(fit)  # added variable: regressing out other variables
+```
+
+We can clearly see that the residuals are not centered around zero. There is a curvature and more residual values lie above zero than below. When looking at the partial residual plots, we can make observations for one variable at a time:
+
+-   **crim:** centered around zero for low values, drops below zero as crime increases
+-   zn: centered around zero
+-   indus: centered around zero
+-   nox: centered around zero
+-   **rm:** clear curvature
+-   age: mostly centered around zero, a few higher points as age increases
+-   **dis:** at low values of dis, there are a few quite high points above zero but on the other hand, a dense collection of points below zero. as dis increases, we see more points above zero than below.
+-   tax: mostly centered around zero
+-   ptratio: centered around zero
+-   black: mostly centered around zero, slightly more points above zero
+-   **lstat:** slight curvature especially for higher values of lstat
+
+Looking at the added-variable plots, we make the following observations:
+
+-   **crime, lstat, and black** all have dense clusters of points that do not fit a linear model very well. One solution may be to transform the variable so that the points are more spread out.
+
+-   **zn, indus, nox, age, and tax** have barely, if any, linear relationship to medv. Almost all produce a horizontal line which signifies that these variables do not affect the response medv.
+
+-   **rm and dis** probably have the most apparent linear relationship to medv. rm is positively correlated and dis is negatively correlated to medv.
+
+```{r}
+# assumption: homoscedasticity
+plot(fit, which=3, cex=1, pch=16)  # scale location
+```
+
+From the residuals vs. fitted plot (plotted in part A) and the scale-location plot above, we can see that the residuals do **not** form a more or less horizontal line. Instead, there is a curvature. It is hard to tell if this is due to heteroscedasticity (since we do not see a fan shape) or if this is simply due to outliers.
+
+```{r}
+# assumption: normality
+hist(fit$residuals)
+qqPlot(fit$residuals, cex=1, pch=16)  # q-q plot
+```
+
+When looking at the distribution of the residuals, we can see that the histogram produces a mostly normal shape except a bit heavier tailed on the right side. The q-q plot validates this as well, as we see that most of the points lie within the confidence band until the rightmost points. It seems that the normality assumption may not hold.
+
+### Problem 2B
+
+```{r}
+# outlier in predictor
+plot(hatvalues(fit), type = "h")
+p = length(fit$coefficients) - 1  # num of variables in model
+n = dim(Boston)[1]
+abline(h = 2 * (p + 1) / n, lty = 2,col = 'darkred')
+```
+
+```{r}
+# outlier in predictor
+fit$model[hatvalues(fit) > 0.25, ]  # most significant 
+```
+
+```{r}
+outliers_pred = hatvalues(fit) > 2 * (p + 1) / n
+predictors = colnames(fit$model) 
+predictors = predictors [! predictors %in% c("medv", "chas", "rad")]
+# for(predictor in predictors){
+#   plot(fit$model[, predictor], fit$model[, "medv"], xlab = predictor, ylab = "medv")
+#   points(fit$model[outliers_pred, predictor], fit$model[outliers_pred, "medv"], 
+#          col = 'blue', pch = 15)
+#   points(fit$model[381, predictor], fit$model[381, "medv"], col = 'darkred', pch = 15)
+# }
+
+plot(fit$model[, "crim"], fit$model[, "medv"], xlab = "crim", ylab = "medv")
+points(fit$model[outliers_pred, "crim"], fit$model[outliers_pred, "medv"], 
+       col = 'blue', pch = 15)
+points(fit$model[381, "crim"], fit$model[381, "medv"], col = 'darkred', pch = 15)
+
+```
+
+Here, the blue points indicate the outliers in predictor (according to the threshold) and the red point indicates the most significant outlier in predictor, namely index 381 as printed above. By looking at each of the predictors, we see that index 381's crime value is significantly higher than the rest of the dataset.
+
+### Problem 2C
+
+```{r}
+# outliers in response
+plot(abs(rstudent(fit)), type = "h", 
+     ylab = "Externally Studentized Residuals (in absolute value)")
+abline(h = qt(.95, n - p - 2),col = 'darkred') 
+```
+
+```{r}
+fit$model[abs(rstudent(fit)) > 4, ]
+```
+
+```{r}
+plot(fit, which=4, lwd=3) # Cook's distances
+abline(h = 1, lty=2)
+```
+
+```{r}
+fit$model[c(366, 369, 381), ]
+```
+
+```{r}
+outliers_resp = boxplot(Boston$medv)$out
+outliers_resp_ind = which(Boston$medv %in% outliers_resp)
+
+outliers_resp
+outliers_resp_ind
+```
+
+It is interesting to note that all the outliers in response happen to be around the same index. From the Externally Studentized Residuals plot, we see that the indices 369, 370, 372, and 373 are the most significant outliers. From the Cook's distance plot, we that the indices 366, 369, and 381 stand out - however, none of the values are above 1 which is the rule of thumb threshold for Cook's distance. After looking at the boxplot of the response variable *medv*, we see that the indices 369, 370, 372, and 373 all have value 50 for *medv*, which is the highest value that occurs and is far above the interquartile range.
+
+### Problem 2D
+
+```{r}
+# influential observations: outlier in predictor and response
+
+# DFBETAS
+par(mfrow=c(2,2))
+for (j in 1:p){
+	plot(abs(dfbetas(fit)[,j]), type='h', xlab=predictors[j], ylab='DFBETAS')
+	abline(h = 2/sqrt(n), lty=2) # threshold for suspects
+	}
+
+# DFFITS	
+par(mfrow=c(1,1))
+plot(abs(dffits(fit)), typ='h', ylab='DFFITS')
+abline(h = 2*sqrt((p+1)/n), lty=2) # threshold for suspects
+
+```
+
+```{r}
+fit$model[abs(rstudent(fit)) > qt(.95, n - p - 2) 
+          & hatvalues(fit) > 2 * (p + 1) / n, ]
+```
+
+The data observations printed above all violate both the hat value threshold and the externally studentized residual threshold, meaning that they are outliers in both predictor and response i.e. influential observations.
+
+### Problem 2E
+
+```{r}
+# multicollinearity
+
+# checking via pairwise correlations b/w predictors
+dat = subset(Boston, select = -c(chas, rad)) 
+round( cor(dat) , 2) # rounded to 2 digits
+
+# checking via variance inflation factors (VIF)
+plot(vif(fit), type='h', lwd=3)
+abline(h = 10, lty=2) # threshold for suspects 
+
+# checking via condition indices
+C = cor(dat[, predictors]) # correlation matrix for the predictors
+L = eigen(C) # eigenvalues  
+K = max(L$val)/L$val # condition indices
+plot(K, type='h', lwd=3)
+abline(h = 1000, lty=2) # threshold for suspects 
+
+```
+
+Looks like multicollinearity is not an issue. None of the correlations in the map have absolute value above 0.8. In addition, for each variable the VIF stays below 10 and the condition number below 1000.
+
+## Contributions:
+
+We worked on all parts of this assignment together.

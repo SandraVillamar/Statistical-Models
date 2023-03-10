@@ -1,0 +1,107 @@
+---
+title: "Lab6"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(car)
+library(alr4)
+library(boot)
+```
+
+# Bootstrap for a median
+
+## Using boot function
+```{r message=FALSE, warning=FALSE}
+attach(UN11)
+# a function that will return the median
+get.median <- function(data, indices) { median(data[indices]) }
+
+set.seed(241)
+b1 <- boot(UN11[,c('fertility')], get.median, R=1000) 
+boot.ci(b1, type="all")
+```
+
+The function `boot.ci` returns confidence intervals at 95\% by default. Intervals can be computed in several ways for the bootstrap samples: `basic` uses the boostrap pivotal confidence interval; `norm` assumes the bootstraped values are approximately normal and independent and computes the interval using the bootstrap mean plus or minus 1.96 times the bootstrap standard error; `perc` uses the percentile bootstrap; `stud`  uses the studentized  bootstrap  confidence  interval.
+
+## Resampling from scratch
+```{r}
+N <- length(UN11$fertility)
+n.boot <- 1000
+dat.boot <- rep(NA, n.boot) ## for saving results
+set.seed(241)
+for (i in 1:n.boot) {
+  indices <- sample(seq(1,N), replace=T) 
+  dat.boot[i] <- median(UN11$fertility[indices])
+}
+cat('Percentile bootstrap confidence interval\n')
+print(round(quantile(dat.boot, c(0.025,0.975)),4))
+cat('Basic bootstrap confidence interval\n')
+print(round(2*median(UN11$fertility) - quantile(dat.boot, c(0.975,0.025)),4))
+```
+
+
+# Bootstrap for regression coefficients
+
+```{r}
+B = 1000
+N = dim(UN11)[1]
+level = 0.95
+
+# fit the linear model
+fit = lm(lifeExpF~fertility,data = UN11)
+beta0 = fit$coefficients[1]
+beta1 = fit$coefficients[2]
+sebeta0=summary(fit)$coefficients[,2][1]
+sebeta1=summary(fit)$coefficients[,2][2]
+
+summary(fit)
+plot(UN11$fertility,UN11$lifeExpF)
+abline(fit,col = 'darkred',lwd = 3)
+```
+
+```{r}
+beta0_boot = rep(NA,N)
+beta1_boot = rep(NA,N)
+t0_boot = rep(NA,N)
+t1_boot = rep(NA,N)
+
+set.seed(241)
+for (i in 1:B){
+  indices = sample(1:N,N,replace=TRUE)
+  x_boot = UN11$fertility[indices]
+  y_boot = UN11$lifeExpF[indices]
+  fit_boot=lm(y_boot~x_boot)
+  beta0_boot[i] = fit_boot$coefficients[1]
+  beta1_boot[i] = fit_boot$coefficients[2]
+  sebeta0_boot = summary(fit_boot)$coefficients[,2][1]
+  sebeta1_boot = summary(fit_boot)$coefficients[,2][2]
+  t0_boot[i]=(beta0_boot[i]-beta0)/(sebeta0_boot)
+  t1_boot[i]=(beta1_boot[i]-beta1)/(sebeta1_boot)
+}
+
+```
+
+Confidence interval for the intercept:
+```{r}
+boot_int = matrix(c(beta0 + quantile(t0_boot,c((1-level)/2,(1+level)/2))*sebeta0),ncol = 2)
+colnames(boot_int) = c('2.5 %','97.5 %')
+cat('Parametric confidence interval\n')
+confint(fit)[1,]
+cat('studentized  bootstrap  confidence  interval\n')
+boot_int
+```
+
+Confidence interval for the slope:
+```{r}
+boot_slp = matrix(c(beta1 + quantile(t1_boot,c((1-level)/2,(1+level)/2))*sebeta1),ncol = 2)
+colnames(boot_slp) = c('2.5 %','97.5 %')
+cat('Parametric confidence interval\n')
+confint(fit)[2,]
+cat('Studentized  bootstrap  confidence  interval\n')
+boot_slp
+```

@@ -1,0 +1,211 @@
+---
+title: "Lab3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(alr4)
+library(car)
+library(MASS)
+library(ggplot2)
+library(ellipse)
+```
+
+# Ex1: Height and weight data
+```{r}
+attach(Htwt)
+plot(wt ~ ht, Htwt) 
+abline(lm(wt ~ ht, Htwt))
+```
+
+Compute $\hat{\beta_0},\hat{\beta_1}$ from scratch
+
+```{r}
+fit1 <- lm(wt ~ ht, Htwt)
+X = model.matrix(fit1)
+beta = solve(t(X)%*%X)%*%t(X)%*%wt
+beta
+```
+
+## Fitting with lm()
+```{r}
+# lm fitting results
+fit1$coefficients
+```
+
+
+## How to check if a random sample is from a certain distribution? 
+
+Look at the empirical density versus the theoretical density
+
+```{r}
+mean = 1
+sd = 2
+x = rnorm(100,mean,sd)
+hist(x,probability = T,xlim = c(min(x),max(x)))
+points(seq(mean-3*sd,mean+3*sd,0.01),dnorm(seq(mean-3*sd,mean+3*sd,0.01),mean,sd),type = 'l',col = 'darkred')
+```
+
+```{r}
+mean = 1
+sd = 2
+x = rnorm(10000,mean,sd)
+hist(x,probability = T,xlim = c(min(x),max(x)))
+points(seq(mean-3*sd,mean+3*sd,0.01),dnorm(seq(mean-3*sd,mean+3*sd,0.01),mean,sd),type = 'l',col = 'darkred')
+```
+
+Look at the QQ plot:
+
+First, we generate i.i.d. sample from normal distribution.
+```{r results='hide'}
+x = rnorm(100,mean,sd)
+qqPlot(x,distribution = 'norm')
+```
+
+Next, we generate i.i.d. sample from t-distribution.
+```{r results='hide'}
+x = rt(100,df = 8)
+qqPlot(x,distribution = 'norm')
+qqPlot(x,distribution = 't',df = 5)
+```
+
+
+# Ex2: Check model assumptions
+
+## Mean zero
+
+
+First, we fit a linear regression model
+```{r}
+n = 100
+x1 = rnorm(n)
+x2 = rnorm(n)
+y = 1 + 2*x1 + 3*x2 + 0.5*rnorm(n)
+m1 = lm(y~x1+x2)
+```
+
+```{r results='hide'}
+plot(m1$residuals,m1$fitted.values)
+abline(h=0,col = 'darkred')
+```
+
+If the linear assumption holds, the residuals should be randomly distributed around 0 with no pattern.
+
+You can apply plot function to a `lm` model fit to get diagnostic plots directly:
+```{r}
+plot(m1)
+```
+
+The added-variable plots can be used to see the relationship between an independent variable and a dependent variable conditioning on other.
+
+```{r}
+avPlots(m1)
+```
+
+When the linear assumption is violated:
+
+```{r}
+x1 = rnorm(n)
+x2 = rnorm(n)
+y = 1 + 2*x1^2 + 3*x2 + 0.5*rnorm(n)
+m2 = lm(y~x1+x2)
+plot(m2$residuals)
+abline(h=0,col = 'darkred')
+```
+```{r}
+avPlots(m2)
+```
+
+
+From the added-variable plot, we can see there is a quadratic relationship between `y` and `x1`.  
+
+## Equal variance and independence
+
+```{r}
+plot(m1,which = 1)
+```
+
+The residual variance does not seem to vary for different fitted values. Also, we can not find any obvious dependency pattern out of the residual plot.
+
+If the residuals are not independent
+```{r}
+e = rep(NA,n)
+e[1] = rnorm(1)
+rho = 0.8
+for (i in 2:n) {
+  e[i] = rho*e[i-1] + sqrt(1-rho^2)*rnorm(1)
+}
+```
+
+```{r}
+plot(e)
+abline(h=0,col = 'darkred')
+```
+
+```{r}
+x1 = rnorm(n)
+x2 = rnorm(n)
+y = 1 + 2*x1 + 3*x2 + e
+m3 = lm(y~x1+x2)
+durbinWatsonTest(m3)
+```
+
+Here, we perform a Durbin-Watson test and get a p-value less than 0.05, so we reject the null claiming there exists dependency.
+
+## Normality
+
+```{r results='hide'}
+qqPlot(m1$residuals)
+```
+If the normality assumption holds, the points in a Q-Q plot should not deviate significantly from a straight diagonal line.
+
+When the normality assumption is violated:
+```{r results='hide'}
+x1 = rnorm(n)
+x2 = rnorm(n)
+eps = 0.5*runif(n)
+y = 1 + 2*x1 + 3*x2 + eps
+m4 = lm(y~x1+x2)
+qqPlot(m4$residuals)
+```
+
+
+## Outliers
+
+When there exists outliers in predictor: check with hat values
+
+```{r}
+x1 = rnorm(n-1)
+x1 = c(x1,10)
+x2 = rnorm(n)
+eps = 0.5*runif(n)
+y = 1 + 2*x1 + 3*x2 + eps
+m5 = lm(y~x1+x2)
+
+plot(hatvalues(m5), type = "h")
+p = 2
+abline(h = 2 * (p + 1) / n, lty = 2,col = 'darkred')
+```
+
+Visualize the potential outliers in predictor:
+```{r}
+plot(x1,x2)
+points(x1[hatvalues(m5) > 2 * (p + 1) / n], x2[hatvalues(m5) > 2 * (p + 1) / n],col = 'darkred',pch = 15)
+```
+
+When there exists outliers in outcome: check with externally studentized residuals
+```{r}
+x1 = rnorm(n)
+x2 = rnorm(n)
+eps = 0.5*runif(n)
+y = 1 + 2*x1 + 3*x2 + eps
+y[n] = y[n] + 2
+
+m6 = lm(y~x1+x2)
+plot(abs(rstudent(m6)), type = "h",ylab = "Externally Studentized Residuals (in absolute value)")
+abline(h = qt(.95, n - p - 2),col = 'darkred') 
+```

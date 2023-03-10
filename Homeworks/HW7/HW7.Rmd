@@ -1,0 +1,138 @@
+---
+title: "HW7"
+author: "Sandra Villamar and Shobhit Dronamraju"
+output: pdf_document
+date: "2023-03-07"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Problem 1A
+
+Fit a logistic regression model with good as response and distance as
+predictor. Interpret the fitted model coefficients and visualize the
+model fit.
+
+```{r}
+dat = read.csv("../data/Placekick.csv")
+fit = glm(good ~ distance, family = binomial(link = "logit"), data = dat)
+fit$coefficients
+exp(fit$coefficients)
+```
+
+In logistic regression, the coefficients represent the change in the log
+odds of the response variable (i.e., the dependent variable) for a
+one-unit increase in the corresponding predictor variable (i.e., the
+independent variable), holding all other predictor variables constant.
+
+In this case, for a one unit increase in distance, the odds increases by
+a factor of $e^{-0.1150267} \approx 0.891$. This is about an 11%
+**decrease** in the odds of y i.e. the success of a placekick.
+
+The intercept in this model corresponds to the probability of the
+success of a placekick when distance is zero. This obviously doesn't
+make quite sense as distance zero means you are already in the goal.
+
+```{r}
+# visualize the model fit
+plot(dat$distance, dat$good, xlab = "distance", ylab = "good")
+curve(expr = predict(object = fit, 
+                     newdata = data.frame(distance = x), 
+                     type = "response"),
+      col = "blue", add= TRUE, lwd=3)
+```
+
+From the plot we see that at around 50 yards, the success of a placekick
+tapers off below 50%. This is intuitive as the farther away one is from
+the goal, the harder it is to make the goal.
+
+### Problem 1B
+
+Now consider all predictors. Apply the forward selection algorithm to
+compute the forward selection path from 'intercept only' to 'full model'
+and chooses the model on that path that minimizes the AIC.
+
+```{r}
+m0 = glm(good ~ 1, family = binomial(link = "logit"), data = dat)
+m1 =  glm(good ~ ., family = binomial(link = "logit"), data = dat)
+model.forward = step(m0,scope = formula(m1), direction="forward")
+summary(model.forward)
+```
+
+After forward selection, the resulting model that minimizes AIC is
+$good \sim distance + PAT + change + wind$.
+
+### Problem 1C
+
+Consider the model selected by the forward selection algorithm. Compute
+the decision boundary when the decision threshold for the probability of
+success is 0.5.
+
+The probability $P = \frac{exp(\beta^TX)}{1 + exp(\beta^TX)}$ equals 0.5
+when $\beta^TX = 0$. Hence, the decision boundary is $\beta^TX = 0$
+where $\beta$ is the vector of coefficients and the first entry of $X$
+is 1.
+
+```{r}
+model.forward$coefficients
+```
+
+Decision Boundary:
+$$0 = 4.752 - 0.087x_{distance} + 1.230x_{PAT} - 0.335x_{change} - 0.523x_{wind}$$
+
+### Problem 2A
+
+Write a function bootGLM(x, y, B=1000) that resamples observations and
+returns standard errors for each of the predictor variables (when the
+others are present in the model) in a logistic model.
+
+```{r}
+bootGLM <- function(x, y, B=1000){
+  
+  n = dim(x)[1]  # num of observations
+  p = dim(x)[2]  # num of predictors
+  
+  coefs = matrix(NA, B, p + 1)  # store model coefs for all B trials
+  
+  for (i in 1:B) {
+    indices = sample(1:n, n, replace=TRUE)
+    x_boot = x[indices,]
+    y_boot = y[indices]
+    dat = data.frame(x_boot, y_boot)
+    model = glm(y_boot ~ ., family = binomial(link = "logit"), data = dat)
+    coefs[i,] = model$coefficients
+  }
+  
+  colnames(coefs) = names(model$coefficients)
+  se = apply(coefs, 2, sd)
+  return(se)
+}
+```
+
+
+### Problem 2B
+Consider the model selected by the forward selection algorithm from Problem 1B. Apply your bootGLM, and compare with the standard errors returned by the summary function.
+```{r}
+# model.forward: good ~ distance + PAT + change + wind
+x = dat[,names(dat) %in% c("distance", "PAT", "change", "wind")]
+y = dat[,9]
+se = bootGLM(x, y)
+se
+```
+```{r}
+summary(model.forward)$coefficients
+```
+
+The standard errors given by bootGLM are very close to those returned by the summary function.
+
+
+
+
+
+
+

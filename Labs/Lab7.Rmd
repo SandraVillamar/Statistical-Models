@@ -1,0 +1,119 @@
+---
+title: "Lab7"
+output: html_document
+---
+
+```{r include=FALSE}
+library(car)
+library(alr4)
+library(leaps)
+library(MASS)
+library(caret)
+```
+
+## Model selection
+```{r}
+data("mantel")
+mantel
+m0 <- lm(Y ~ 1, data=mantel) 
+step(m0,scope= ~ X1 + X2 + X3, direction="forward")
+```
+
+Starting with the mean function with no predictors, at the first step we consider adding the one term that makes AIC as small as possible, which is $X_3$. At the second step, we consider adding another term after $X_3$ if it further reduces AIC; in this problem adding either $X_1$ or $X_2$ actually increases AIC, so we would select $\{X_3\}$.
+
+```{r}
+m1 <- lm(Y ~ X1 + X2 + X3, data=mantel)
+step(m1,scope=~1, direction="backward")
+```
+
+It appears that the backward elimination algorithm selects to remove only $X_3$. Using backward elimination, we select $\{X_1 , X_2 \}$. These two computational algorithms give different answers. We would certainly prefer the choice $\{X_1 , X_2 \}$ from backward elimination because it gives an exact fit.
+
+
+## The Boston dataset
+
+### Forward selection
+```{r}
+dat = Boston[, -c(4, 9)]
+m0 = lm(medv ~ 1, data=dat) 
+m1 = lm(medv ~ ., data=dat) 
+step(m0,scope = formula(m1), direction="forward")
+```
+The forward selection alpgorithm selects $\{lstat , rm, ptratio, dis, nox, black, zn, crim \}$. AIC of the model selected by forward selection alpgorithm is 1614.5.
+
+### Backward selection 
+```{r}
+step(m1, direction="backward")
+
+```
+
+The backward selection alpgorithm selects $\{crim, zn, nox, rm, dis, ptratio, black, lstat\}$. This is the same as the model selected by the forward selection alpgorithm.
+
+
+### Best subset
+
+```{r}
+X = dat[,!names(dat) %in% c('medv')]
+L = leaps(X, dat$medv)
+ind = which.min(L$Cp)
+plot(L$size,L$Cp)
+points(L$size[ind],L$Cp[ind],col = 'darkred',pch = 19)
+points(aggregate(L$Cp, by = list(L$size), min),lwd = 2,col = 'darkred',type = 'b',pch = 19)
+```
+
+Best model selected:
+
+```{r}
+names(X)[L$which[ind,]] 
+```
+
+The best subset selection alpgorithm selects $\{crim, zn, nox, rm, dis, ptratio, black, lstat\}$. This is the same as the model selected by the two greedy model selection algorithms.
+
+
+### Prediction error estimated by k-fold cross-validation
+
+Consider the model `medv ~ crim + zn + nox + rm + dis + ptratio + black + lstat`. We aim to use k-fold cross validate to estimate the RMSE of this model.
+
+Split the dataset into blocks/folds
+```{r}
+set.seed(241)
+k = 5
+n = nrow(dat)
+dat_cv = dat[sample(n),]
+folds <- cut(seq(1,n),breaks=k,labels=FALSE)
+folds
+```
+
+The model is fitted on $K − 1$ blocks and tested on the remaining block. Each block plays the role of validation data in turn. This results in $K$ different estimates for the prediction error. Their average is the cross-validation estimate. 
+
+```{r}
+
+cv_err = rep(NA, k)
+
+for (i in 1:k) {
+  dat_train = dat_cv[folds != i,]
+  dat_val = dat_cv[folds == i,]
+  
+  m_train = lm(medv ~ crim + zn + nox + rm + dis + ptratio + black + lstat, data = dat_train)
+  pred_val = predict(m_train, newdata = dat_val)
+  res_val = dat_val$medv -pred_val
+  cv_err[i] = sqrt(mean(res_val^2))
+}
+
+mean(cv_err)
+
+```
+ The estimated RMSE is `r mean(cv_err)`
+
+
+Cross-validation using functions in the package `caret`:
+
+```{r}
+set.seed(241)
+train_control <- trainControl(method = "cv",number = k)
+m_cv <- train(medv ~ crim + zn + nox + rm + dis + ptratio + black + lstat, data = dat_cv,
+               method = "lm",
+               trControl = train_control)
+m_cv
+```
+
+If we use the `caret` package, The estimated RMSE is `r m_cv$results['RMSE']`.

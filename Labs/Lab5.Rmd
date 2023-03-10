@@ -1,0 +1,189 @@
+---
+title: "Lab5"
+output: html_document
+---
+
+```{r,include=FALSE}
+library(alr4)
+library(lattice)
+library(car)
+library(alr4)
+library(emmeans)
+```
+
+# Factors
+A factor is a qualitative variable with say $a$ levels or groups. It will generally be represented by $a − 1$ dummy variables. In models with no intercept, $a$ dummy variables may be required.
+
+```{r}
+z <- c(2, 3, 4, 2, 3, 4, 3, 3, 2, 2)
+class(z)
+
+# convert z to a factor
+z.factor <- factor(z) 
+is.factor(z.factor)
+summary(z.factor)
+
+# change the labels for the levels of the factor
+z.factor <- factor(z, labels=c("Group1", "Group2", "Group3")) 
+summary(z.factor)
+
+# create ordered factor variables
+z.factor.order <- ordered(z, levels = c("Group1", "Group2", "Group3"))
+
+# adding levels in factor variables
+z[11] <- 5
+z.factor[11] <- "Group4" ## this is wrong
+z.factor
+
+# a correct way
+z.factor <- factor(z.factor, levels = c(levels(z.factor), "Group4"))
+z.factor[11] <- "Group4"
+z.factor
+levels(z.factor)
+
+# dropping levels in factor variables
+z.factor.new <- z.factor[z.factor != "Group4"]
+z.factor.new
+z.factor.new <- factor(z.factor.new)
+z.factor.new
+levels(z.factor.new)
+
+```
+
+R uses the ﬁrst level of a factor as a baseline group, but this is not always desirable.
+
+```{r}
+levels(relevel(z.factor.new, "Group3"))
+levels(factor(z.factor.new, levels=c("Group2", "Group3", "Group1")))
+```
+
+
+# Pairwise Comparisons of Level Means for Group
+
+UN11 data: national health, welfare, and education statistics for 210 places, mostly UN members, but also other areas like Hong Kong that are not independent countries.
+
+Response: `lifeExpF` Female life expectancy, years
+
+Categorical predictor: `group` OECD, Africa and other
+
+```{r}
+attach(UN11)
+class(UN11$group)
+levels(UN11$group)
+# The argument id.n=2 identiﬁes up to 2 points in each boxplot and labels them
+Boxplot(lifeExpF ~ group, data=UN11, id=(list(n=2))) 
+
+# generates the dummy variables for group for the ﬁrst 10 rows
+head(model.matrix(lifeExpF ~  group, UN11), 10)
+```
+
+
+```{r}
+##Simple regresion
+m_UN <- lm(lifeExpF ~ group, UN11) 
+summary(m_UN)
+```
+The mean difference in female life expectancy between the African countries and the OECD countries is -22.7. 
+
+# Multiple categorical predictors
+
+For a complex dataset with multiple potential predictors, we usually start with graphical summaries of the data and discuss the graphs. 
+
+The variables include `degree`, a factor with levels PhD and MS; `rank`, a factor with levels Asst, Assoc, and Prof; `sex`, a factor with levels Male and Female; `Year`, years in current rank; `ysdeg`, years since highest degree, and `salary`, academic year salary in dollars. For this dataset, the main question is whether there is discrimination against women in salary.
+
+```{r}
+data("salary")
+par(mfrow=c(1, 3)) 
+boxplot(salary~sex, salary) 
+boxplot(salary~rank, salary) 
+boxplot(salary~degree, salary)
+```
+
+Female salaries appear to be generally lower than male salaries, salary increases with rank. The boxplots don’t have anything to say about interactions.
+
+```{r}
+#Showing sex - rank interaction
+boxplot(salary~sex * rank, salary)
+```
+
+Or use `interaction.plot() `
+```{r}
+interaction.plot( salary$rank, salary$sex, salary$salary, fixed = TRUE, col = 1:9, lwd = 2) 
+```
+
+
+Fitting a simple linear regression with only `sex` as the predictor:
+
+```{r}
+summary(m0 <- lm(salary ~ sex, salary))$coef
+```
+
+```{r}
+anova(m0)
+```
+From the anova output, we can see the p-value is 0.07 two-sided, and about 0.035 for the one-sided test that women are paid less. The point estimate of the Sex eﬀect is $3340 in favor of men.
+
+
+Add `rank` and the interaction terms:
+
+```{r}
+summary(m1 <- lm(salary ~ sex*rank, salary))$coef
+```
+
+After adding `rank` to the model, the p-values for `sex` and the interaction terms are not significant.
+
+Add all predictors to the model:
+```{r}
+m2 <- lm(salary ~ ., data=salary) 
+summary(m2)
+```
+The sex effect is still not significant.
+
+# Robust regression
+```{r message=FALSE, warning=FALSE}
+load("04cars.rda")
+tmp = dat[,c(13,15,16,18,19)] 
+tmp = tmp[complete.cases(tmp),]
+tmp = as.data.frame(tmp)
+names(tmp) = c("hp", "mpg", "wt", "len", "wd")
+dat = tmp
+attach(dat)
+```
+
+## Here we focus on mpg ~ hp
+
+```{r}
+m0 = lm(mpg ~ hp)
+summary(m0)
+plot(hp, mpg, pch = 16)
+abline(m0, col = "blue", lwd = 3)
+```
+
+## Packages for robust regression models: 
+```{r warning=FALSE,message=FALSE}
+library(quantreg)
+library(MASS)
+```
+
+First, the least absolute regression:
+```{r}
+m.l1 = rq(mpg ~ poly(hp, 3))
+summary(m.l1)
+```
+
+Huber's M-estimation:
+```{r}
+m.huber = rlm(mpg ~ poly(hp, 3),psi = psi.huber)
+summary(m.huber)
+```
+Other M-estimation models can be fitted by changing the `psi` parameter. 
+`psi` functions are supplied for the Huber, Hampel and Tukey bisquare proposals as `psi.huber`, `psi.hampel` and `psi.bisquare`.
+
+Least median of squares and least trimmed sum of squares:
+ 
+```{r}
+m.lms = lmsreg(mpg ~ poly(hp, 3))
+m.lms$coefficients
+m.lts = ltsreg(mpg ~ poly(hp, 3))
+m.lts$coefficients
+```

@@ -1,0 +1,99 @@
+---
+title: "Lab2"
+output: html_document
+---
+
+
+
+```{r include=FALSE}
+library(alr4)
+library(car)
+library(MASS)
+library(ggplot2)
+library(ellipse)
+```
+
+
+# Hypothesis testing
+
+Consider the Boston data and the linear model: $medv = \beta_0 + \beta_1*crim + \beta_2*nox + \beta_3*rm + \beta_4*age + \beta_5*dis + \epsilon$
+```{r}
+lm.medv = lm(medv ~ crim + nox + rm + age + dis,data = Boston) 
+summary(lm.medv)
+```
+
+## Hypothesis testing of estimated slope
+Test the hypothesis that the slope $\beta_1 = 0$, against the alternative that $\beta_1 < 0$.
+
+```{r}
+tval <- (coef(lm.medv)[2] - 0)/ sqrt(vcov(lm.medv)[2,2]) 
+df <- dim(Boston)[1] - 2
+data.frame(tval = tval, df=df, pval = 1 - pt(abs(tval), df))
+```
+
+The p-value is `r 1 - pt(abs(tval), df)` < 0.05. Therefore we reject the null hypothesis.
+
+```{r}
+confint(lm.medv, "crim",level = 0.95)
+```
+
+If we want to test the hypothesis that $\beta_3 = \beta_4 = 0$:
+
+```{r}
+lm.medv.h0 = lm(medv ~ crim + nox + dis,data = Boston) 
+anova(lm.medv.h0, lm.medv)
+```
+
+
+The p-value is less than 0.05. We reject the null hypothesis, claiming at least one of the coefficient is not 0.
+
+# Confidence region for regression coefficients 
+
+```{r}
+plot(ellipse(lm.medv,which = c(4,5),level = 0.95),type = 'l',col = 'darkred')
+points(lm.medv$coefficients[4],lm.medv$coefficients[5],col = 'darkblue',pch = 18)
+```
+
+
+## Coverage probability of confidence intervals
+
+The confidence level represents the long-run proportion of corresponding CIs that contain the true value of the parameter. For example, out of all intervals computed at the 95\% level, 95\% of them should contain the parameter's true value.
+
+How do we validate this? Simulation
+
+```{r}
+B = 1000
+beta0 = 1
+beta1 = 3
+n = 100 
+CI = data.frame(lower = rep(NA,B),upper = rep(NA,B),contain_true_value = rep(NA,B))
+
+for (i in 1:B) {
+  x = rnorm(n)
+  y = beta0 + beta1*x + 0.5*rnorm(n)
+  lm.sim = lm(y~x)
+  beta1_CI = confint(lm.sim, "x",level = 0.95)
+  CI$lower[i] = beta1_CI[1]
+  CI$upper[i] = beta1_CI[2]
+  CI$contain_true_value[i] = (beta1_CI[1] <= beta1 & beta1_CI[2] >= beta1)
+}
+```
+
+```{r}
+cols = c('TRUE' = 'darkgreen','FALSE' = 'darkred')
+size = c('TRUE' = 0.5,'FALSE' = 1)
+ggplot(data = CI) + 
+  geom_errorbar(aes(x = 1:B,y = beta1,ymin=lower, ymax=upper,color = contain_true_value,size = contain_true_value)) +
+  geom_hline(yintercept = beta1) +
+  scale_color_manual(values = cols) + 
+  scale_size_manual(values = size) +
+  xlab('Number of experiments')
+```
+
+Validate coverage probability:
+
+```{r}
+sum(CI$contain_true_value)/B
+```
+
+This estimated coverage probability will coverge to 0.95 as $B \to \infty$.

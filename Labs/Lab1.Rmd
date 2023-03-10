@@ -1,0 +1,236 @@
+---
+title: "Lab1: Introduction to R, RStudio and R Markdown"
+output: html_document
+---
+
+# Installation of R and RStudio
+If you have used R or RStudio before, you may uninstall the old versions and install the latest version of R and RStudio since some libraries might not be compatible with older versions of R.
+
+# Basic R Markdown
+
+"R Markdown is an authoring format that enables easy creation of dynamic documents, presentations, and reports from R. It combines the core syntax of markdown (an easy-to-write plain text format) with embedded R code chunks that are run so their output can be included in the final document. R Markdown documents are fully reproducible (they can be automatically regenerated whenever underlying R code or data changes)." -- http://rmarkdown.rstudio.com/
+
+R Markdown is a "combination" of Markdown and R. Markdown uses plain text simple syntax to format the document, which could be converted into html and other formats. R Markdown allows seamless integration of Markdown and R language.
+
+Here are some basics to help you start with your homework.
+
+# Header 1
+
+## Header 2
+
+### Header 3
+
+```
+# Header 1
+## Header 2
+### Header 3
+```
+
+## List:
+
+### Unordered List:
+
+* Item 1
+
+* Item 2
+
+    + Item 2a
+    
+    + Item 2b
+    
+```
+* Item 1
+
+* Item 2
+
+    + Item 2a
+    
+    + Item 2b
+    
+```
+
+### Ordered/Combined List:
+
+1. Item 1
+
+2. Item 2
+
+    a) Item 2a
+    b) Item 2b
+
+3. Item 3
+
+    + Item 3i
+    + Item 3ii
+    
+```
+1. Item 1
+
+2. Item 2
+
+    a) Item 2a
+    b) Item 2b
+
+3. Item 3
+
+    + Item 3i
+    + Item 3ii
+```
+
+## R Code Chunks (MOST IMPORTANT!)
+You can insert either a "block" of R code or a "line" of R code into the document. R Markdown will evaluate (run) it and give you whatever results they yield to.
+
+### R Code Block
+If you use the following command
+<pre><code>```{r}
+x=rnorm(100)
+mean(x)
+sd(x)
+```</code></pre>
+
+it will give you the output
+```{r}
+x=rnorm(100)
+mean(x)
+sd(x)
+```
+
+You can specify various parameters for the code block. For example, if you don't want your code to be shown, then you can specify "echo=FALSE"
+
+<pre><code>```{r echo=FALSE}
+x=rnorm(100)
+mean(x)
+sd(x)
+```</code></pre>
+
+then you will get
+
+```{r echo=FALSE}
+x=rnorm(100)
+mean(x)
+sd(x)
+```
+
+You can also specify <code>eval=FALSE</code>, which tells R Markdown not to evaluate your code. Another thing you can do is to hide your output using code <code>results="hide"</code>. This is useful because usually you want to load all necessary dataset and packages, and specify whatever global options at the very beginning of your document. And to make the manuscript clean, you don't want people to see it. Then you can simply write
+
+<pre><code>```{r results="hide",echo=FALSE}
+x=rnorm(100)
+y=rbinom(10,10,0.2)
+```</code></pre>
+
+R code blocks may also be used to insert R plots in your document directly. Following the previous example,
+
+<pre><code>```{r Figure1,fig.width=4,fig.height=3,res=300}
+x=rnorm(100)
+plot(1:100,x)
+```</code></pre>
+
+gives you
+
+```{r Figure1,fig.width=6,fig.height=4,res=300}
+x=rnorm(100)
+plot(1:100,x)
+```
+
+# Plots
+```{r}
+dat <- data.frame(
+  time = factor(c("Lunch","Dinner"), levels=c("Lunch","Dinner")),
+  total_bill = c(14.89, 17.23)
+)
+dim(dat)
+names(dat)
+summary(dat)
+```
+These days, people tend to either go by way of base graphics or with ggplot2.
+
+## Barplot
+```{r}
+#par(mfrow=c(1,2))
+## ggplot
+library(ggplot2)
+ggplot(data=dat, aes(x=time, y=total_bill, fill=time)) +
+  geom_bar(colour="black", fill="#DD8888", width=.8, stat="identity") +
+  xlab("Time of day") + ylab("Total bill") +
+  ggtitle("Average bill for 2 people")
+
+## base graphics
+par(las=1)
+barplot(dat$total_bill,
+        names.arg=dat$time,
+        col="#AFC0CB",
+        border=FALSE,
+        main="Average bill for 2 people")
+```
+
+
+### Inline R Code
+
+Inline R code could be a few simple R codes that are also evaluated and displayed directly with the text. For example, if we want to know the mean of vector <code>x</code> generated in the previous code block, we can simply enclosing the expression (<code>mean(x)</code>) within a single back-tick qualified with 'r'. So the mean of x is `r mean(x)`.
+
+There are definitely more about R Markdown. For more information on the general Markdown writing syntax, please consult http://rmarkdown.rstudio.com/authoring_basics.html. For R code chunk options and configurations, visit http://yihui.name/knitr/options/.
+
+## Math in R Markdown
+Inline math is marked off with a pair of dollar signs (`$`), as $\pi r^2$ or $e^{i\pi}$. Mathematical displays are marked off with `\[` and `\]`, as in
+\[
+e^{i \pi} = -1
+\]
+
+### Elements of Math Mode
+* Most letters will be rendered in italics (compare: `a` vs. $a$ vs. a; only the last is in math mode). The spacing between letters also follows the conventions for math, so don’t treat it as just another way of getting italics.
+
+* Greek letters can be accessed with the slash in front of their names, as `\alpha` for $\alpha$. Making the first letter upper case gives the upper-case letter, as in `\Gamma` for $\Gamma$ vs. `\gamma` for $\gamma$. (Upper-case alpha and beta are the same as Roman A and B, so no special commands for them.)
+
+* See, e.g. https://www.overleaf.com/learn/latex/List_of_Greek_letters_and_math_symbols, for other mathematical symbols.
+
+* A few examples:
+  + For bold face, use `\mathbf`, as `(\mathbf{x}^T\mathbf{x})^{-1}\mathbf{x}^T\mathbf{y}` for $(\mathbf{x}^T\mathbf{x})^{-1}\mathbf{x}^T\mathbf{y}$.
+  + Fractions can be created with \frac, like so: `\frac{a+b}{b} = 1 + \frac{a}{b}` produces $\frac{a+b}{b} = 1 + \frac{a}{b}$. 
+  + Sums can be written like so: `\sum_{i=1}^{n}{x_i^2}` produces $\sum_{i=1}^{n}{x_i^2}$. Products and integrals work similarly, only with `\prod` and `\int`:
+  + Multiple equations, with their equals signs lined up, can be created using eqnarray, as follows.  
+```
+\[   
+ \begin{eqnarray}
+ X & \sim & \mathrm{N}(0,1)\\    
+ Y & \sim & \chi^2_{n-p}\\   
+ R & \equiv & X/Y \sim t_{n-p}   
+ \end{eqnarray}  
+ \]
+```
+
+\[
+\begin{eqnarray}
+X & \sim & \mathrm{N}(0,1)\\
+Y & \sim & \chi^2_{n-p}\\
+R & \equiv & X/Y \sim t_{n-p}
+\end{eqnarray}
+\]
+
+Notice that `&` surrounds what goes in the middle on each line, and each line (except the last) is terminated with `\\`.
+
+### Exercise 
+
+This exercise involves the Boston housing data set.
+
+
+a) To begin, load in the `Boston` data set. The `Boston` data set is part of the `MASS` library in R.
+
+```
+library(MASS)
+?Boston
+```
+
+b) Make some pairwise scatter plots of the predictors (columns) in this dataset. Describe your findings.
+
+c) Are any of the predictors associated with per capita crime rate `crim`? If so, explain the relationship.
+
+d) Do any of the suburbs of Boston appear to have particularly high crime rates? Tax rates? Pupil-teacher ratios? Comment on
+the range of each predictor.
+
+e) How many of the suburbs in this data set bound the Charles river?
+
+f) What is the median pupil-teacher ratio among the towns in this data set?
+
+g) Which suburb of Boston has lowest median value of owner-occupied homes? What are the values of the other predictors for that suburb, and how do those values compare to the overall ranges for those predictors? Comment on your findings.
+
+h) In this data set, how many of the suburbs average more than seven rooms per dwelling? More than eight rooms per dwelling? Comment on the suburbs that average more than eight rooms per dwelling.

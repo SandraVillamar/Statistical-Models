@@ -1,0 +1,144 @@
+---
+title: "lab9"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(car)
+library(alr4)
+library(leaps)
+library(MASS)
+library(glmnet)
+library(lars)
+library(MixMatrix)
+```
+
+
+## Penalized Regression
+
+Ridge regression adds a penalty term to the RSS, which is proportional to the square of the L2 norm of the regression coefficients. This penalty term shrinks the regression coefficients towards zero, but does not set them exactly to zero. 
+
+Lasso also adds a penalty term to the RSS. The difference is the penalty term is proportional to the L1 norm. This penalty term has the effect of shrinking some of the regression coefficients exactly to zero. Lasso is widely used for model selection.
+
+### Ridge regression
+
+It is well-known that ridge regression tends to give similar coefficient values to correlated variables, whereas the lasso may give quite different coefficient values to correlated variables. 
+
+We can check this with simulated data:
+```{r}
+n = 30
+set.seed(241)
+x = mvrnorm(n = n, mu = c(0,0), Sigma = matrix(c(1,0.99,0.99,1),nrow = 2))
+x = as.data.frame(x)
+names(x) = c('x1','x2')
+y = 1 + 2*x$x1 + 3*x$x2 + rnorm(n)
+```
+
+First try the `lm()` model:
+
+```{r}
+m.lm = lm(y~ x1 + x2,data = x)
+summary(m.lm)
+```
+
+Ridge regression:
+
+```{r}
+m.ridge = glmnet(y = y, x = x,alpha = 0,lambda = seq(0,2,len = 100))
+plot(m.ridge,xvar = "lambda", label = TRUE)
+```
+
+As we can see as $\lambda$ increases, the ridge regression model tend to give similar coefficient values to `x1` and `x2`.
+
+Next, let's try lasso regression:
+
+```{r}
+m.lasso = glmnet(y = y, x = x, alpha = 1,lambda = seq(0,2,len = 100))
+plot(m.lasso,xvar = "lambda", label = TRUE)
+```
+
+As $\lambda$ increases, Lasso does not give similar coefficient values.
+
+### Lasso regression
+
+Lasso regression can be used for feature selection, as it identifies the most important predictor variables and discards the rest.
+
+Let's consider a simulation setting with sparsity:
+```{r}
+n = 20
+set.seed(241)
+x = mvrnorm(n = n, mu = rep(0,20), Sigma = CSgenerate(20, 0.5))
+x = as.data.frame(x)
+names(x) = paste('x',seq(1,20),sep = "")
+y = 1 + 2*x$x1 + 3*x$x2 + rnorm(n,sd = 1)
+```
+
+First try the `lm()` model:
+
+```{r}
+m.lm = lm(y~ .,data = x)
+summary(m.lm)
+```
+
+For `lm()`, we get a perfect fit. This is obviously overfitting the data.
+
+Ridge regression:
+
+```{r}
+m.ridge = glmnet(y = y, x = x,alpha = 0)
+plot(m.ridge,xvar = "lambda", label = TRUE)
+```
+
+Ridge regression cannot shrink the coefficients exactly to 0, while the true model only has two predictors `x1` and `x2`.
+
+
+Lasso regression:
+
+```{r}
+m.lasso = glmnet(y = y, x = x, alpha = 1)
+plot(m.lasso,xvar = "lambda", label = TRUE)
+```
+
+With proper choice of $\lambda$, the lasso regression model sets the coefficients of all predictors except for `x1` and `x2` to 0.
+
+
+### Real data and parameter tuning
+
+We consider the `Boston` data and try to predict per capita crime rate using lasso regression:
+
+```{r}
+data(Boston)
+dat = Boston[, -c(4, 9)]
+x = model.matrix(crim~.,dat)[,-1]
+y = Boston$crim
+```
+
+Apply the 10-fold cross-validation to choose the best $\lambda$:
+```{r}
+set.seed(241)
+lasso.cv = cv.glmnet(y = y, x = x, alpha=1, nfolds = 10)
+lasso.cv$lambda.min
+```
+
+Plot the coefficient against $log(\lambda)$:
+```{r}
+m.lasso = glmnet(y = y, x = x, alpha = 1)
+plot(m.lasso,xvar = "lambda", label = TRUE)
+abline(v = log(lasso.cv$lambda.min),col = 'red')
+```
+
+```{r}
+m.lasso = glmnet(y = y,x = x,alpha=1,lambda=lasso.cv$lambda.min)
+m.lasso$beta
+```
+
+If we fit the model with $\lambda$ selected by cross-validation, only `age` is removed from the model.
+
+
+
+
+

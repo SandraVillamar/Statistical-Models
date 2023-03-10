@@ -1,0 +1,147 @@
+---
+title: "Lab4"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(splines)
+```
+
+# Condition number of a matrix
+
+We are interested in the following linear model:
+\begin{equation}
+y = X\beta + \epsilon
+\end{equation}
+
+- We aim to find the coefficient estimate $\hat{\beta}$, and $\hat{\beta}$ is affect by $\epsilon$.
+
+- The condition number of $X$ measures how much can a change in $\epsilon$ affect the
+solution $\hat{\beta}$.
+
+- If a matrix is singular, then its condition number is infinite. A finite large condition
+number means that the matrix is close to being singular.
+
+- A problem with a low condition number is said to be well-conditioned, while a problem with a high condition number is said to be ill-conditioned. 
+
+## Compute the condition number in R 
+
+```{r}
+X = matrix(c(3.2,-7.6,2.2,-5.2),nrow = 2)
+svd_X = svd(X)
+k_X = max(svd_X$d)/min(svd_X$d) 
+k_X
+```
+Check the sensitivity of the solution to changes in $y$
+```{r}
+beta = matrix(c(1,2),nrow = 2)
+y = X%*%beta
+solve(X, y)
+```
+
+
+```{r}
+solve(X, y + rnorm(2,0,0.5))
+```
+
+
+```{r}
+solve(X, y + rnorm(2,0,0.5))
+```
+
+```{r}
+solve(X, y + c(0,0.1))
+```
+As we can see, the solution changes dramatically even there is only a small change in $y$.
+
+How about the polynomial regression?
+
+```{r}
+n = 100
+p = 10
+x = runif(100)
+X = poly(x, degree = p, raw = TRUE)
+X = cbind(rep(1, n), X) 
+d = svd(X)$d 
+max(d)/min(d) 
+```
+
+# Hypothesis testing and anova
+
+```{r}
+load("04cars.rda")
+tmp = dat[,c(13,15,16,18,19)] 
+tmp = tmp[complete.cases(tmp),]
+tmp = as.data.frame(tmp)
+names(tmp) = c("hp", "mpg", "wt", "len", "wd")
+dat = tmp
+attach(dat)
+fit1 <- lm(mpg ~ wt + len + wd + hp,data = dat)
+fit2 <- lm(mpg ~ wt + len + wd + poly(hp, 2, raw = TRUE))
+fit3 <- lm(mpg ~ wt + len + wd + poly(hp, 3, raw = TRUE))
+fit4 <- lm(mpg ~ wt + len + wd + poly(hp, 4, raw = TRUE))
+fit5 <- lm(mpg ~ wt + len + wd + poly(hp, 5, raw = TRUE))
+fit6 <- lm(mpg ~ wt + len + wd + poly(hp, 6, raw = TRUE))
+fit7 <- lm(mpg ~ wt + len + wd + poly(hp, 7, raw = TRUE))
+anova(fit1,fit2,fit3,fit4,fit5,fit6,fit7)
+```
+
+# Splines
+
+Consider data on a set of 892 females under 50 years collected in three villages in West Africa. We would like to explore the relationship between age (in years) and a crude measure of body fat, which is triceps skinfold thickness.
+ 
+
+```{r fig.height = 6, fig.width = 6}
+triceps <- read.csv('triceps.csv')
+plot(triceps$triceps~triceps$age)
+abline(lm(triceps~age,data = triceps),col = 'red',lwd = 3)
+
+```
+
+First try polynomial fit:
+
+```{r fig.height = 6, fig.width = 6,warning=FALSE}
+pts = seq(0,55,by = 0.1)
+plot(triceps$age, triceps$triceps, pch = 16)
+for (d in 1:5){
+	fit = lm(triceps ~ poly(age, d, raw = TRUE),data = triceps)
+	val = predict(fit, data.frame(age = pts))
+	lines(pts, val, col=rainbow(5)[d], lwd = 3)
+	}
+
+```
+
+Spline of degree 2:
+```{r fig.height = 6, fig.width = 6,warning=FALSE}
+K = quantile(triceps$age, c(0.4,0.8), type=1)
+plot(triceps$age, triceps$triceps, pch = 16)
+fit = lm(triceps ~ bs(age,degree=2,knots=K),data = triceps)
+val = predict(fit, data.frame(age = pts))
+lines(pts, val, col="blue", lwd = 3)
+```
+
+Spline of degree 3:
+
+```{r fig.height = 6, fig.width = 6,warning=FALSE}
+K = quantile(triceps$age, c(0.4,0.8), type=1)
+plot(triceps$age, triceps$triceps, pch = 16)
+fit = lm(triceps ~ bs(age,degree=3,knots=K),data = triceps)
+val = predict(fit, data.frame(age = pts))
+lines(pts, val, col="blue", lwd = 3)
+```
+
+Spline of degree 4:
+
+```{r fig.height = 6, fig.width = 6,warning=FALSE}
+K = quantile(triceps$age, c(0.4,0.8), type=1)
+plot(triceps$age, triceps$triceps, pch = 16)
+fit = lm(triceps ~ bs(age,degree=4,knots=K),data = triceps)
+val = predict(fit, data.frame(age = pts))
+lines(pts, val, col="blue", lwd = 3)
+```
+
+
