@@ -1,0 +1,472 @@
+---
+title: "Final Exam"
+author: "Sandra Villamar"
+date: "2023-03-16"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load Data and Libraries
+
+```{r}
+dat = read.csv("stackloss.csv", sep=" ")
+
+library(car)
+library(leaps)
+library(lars)
+```
+
+### Problem 1A
+
+```{r}
+m = lm(Stack.Loss ~ Acid.Conc, data = dat)
+summary(m)
+```
+
+The estimated value of the intercept is -42.7441. This means that when the percentage concentration of circulating acid is 0%, the model predicts that the percentage of the ingoing ammonia lost in the process of the reaction from ammonia to nitric acid is about -42.7%. Hence at zero acid concentration, the reaction from ammonia to nitric acid actually produces 42.7% more ammonia instead of losing it. This obviously does not make sense. The reason why we get this value is because when building the model, we only use acid concentrations between 57.2% and 59.3%. Therefore looking at the model's behavior at 0% is extrapolating from our given information and leads to false conclusions. We can fix this by standardizing our data.
+
+Furthermore, we have the estimated value of the slope at 0.7590. This means that with a 1% increase in the concentration of circulating acid, the model predicts a 0.7590% increase in the percentage of lost ammonia.
+
+### Problem 1B
+
+```{r}
+Acid.Conc.c = dat$Acid.Conc - mean(dat$Acid.Conc)
+OLS1 = lm(Stack.Loss ~ Acid.Conc.c, data = dat)
+summary(OLS1)
+```
+
+With the centered acid concentration, we get the same slope value as the un-centered (which makes sense as we simply shifted the predictor variable). Now though, we get an intercept value that makes more sense because the predictor value of zero is within the range of the model input. The intercept interpretation is that at the mean acid concentration (\~58.63%), the model predicts an ammonia loss of 1.75%.
+
+### Problem 1C
+
+```{r}
+# 1. errors have zero mean
+plot(OLS1, which=1, pch=16)  # residuals vs. fitted values
+
+plot(Acid.Conc.c, dat$Stack.Loss, ylab = "Stack.Loss")
+abline(OLS1)
+```
+
+The zero mean model assumption seems to hold. Although for higher fitted values, there is some unevenness: there are more points with negative residuals but a few points with high positive residuals. Overall, the deviance from zero is not too significant. From the second plot we see that there is a somewhat linear trend in which higher values of acid concentration lead to higher values of ammonia loss.
+
+If this assumption was violated, the coefficient estimates would be biased which is problematic as we want $E[\hat{\beta}] = \beta$ so that the model correctly interprets our data.
+
+```{r}
+# 2. errors have equal variance i.e. homoscedasticity
+plot(OLS1, which=3, cex=1, pch=16)  # scale location
+```
+
+From both the scale-location plot and the residual vs. fitted values plot above, we see that the homoscedasticity assumption is violated. There is a clear fan shape showing that variance increases for higher fitted values. This indicates that the errors are heteroscedastic.
+
+Heteroscedasticity increases the variance of the coefficient estimates and hence it becomes harder to trust the results produced by the linear model summary.
+
+```{r}
+# 3. errors are normally distributed
+hist(OLS1$residuals)
+qqPlot(OLS1$residuals, cex=1, pch=16)  # q-q plot
+```
+
+The normality assumption is violated. From the histogram we see that the distribution is skewed right. From the q-q plot, we see that there are observations on the right-hand side that do not fall in the confidence band of a normal distribution.
+
+When this assumption is violated, it causes the coefficient estimates to not be normally distributed. This means that we can not trust the associated p-value when deciding whether or not the predictor variable is significant to the model.
+
+It is possible to assess normality of residuals with a histogram and a q-q plot as shown above. However, in our case since we already concluded that the homoscedasticity assumption has been violated, it does not make sense to address the normality assumption since this requires homoscedasticity.
+
+### Problem 1D
+
+An outlier in predictor (aka a high-leverage point) is a data point $(\boldsymbol{x_i}, y_i)$ such that $\boldsymbol{x_i}$ is away from the bulk of the sample predictor vectors. We can check this by plotting the hat values:
+
+```{r}
+plot(hatvalues(OLS1), type = "h")
+p = 1
+n = dim(dat)[1]
+abline(h = 2 * (p + 1) / n, lty = 2,col = 'darkred')
+```
+
+The 17th index has the largest hat value and considered problematic. We can visualize where this observation is compared to the rest and fit a new linear model without this point:
+
+```{r}
+plot(Acid.Conc.c, dat$Stack.Loss, ylab = "Stack.Loss")
+points(
+  Acid.Conc.c[hatvalues(OLS1) > 2 * (p + 1) / n],
+  dat$Stack.Loss[hatvalues(OLS1) > 2 * (p + 1) / n],
+  col = 'darkred', pch = 15)
+
+# fit lm without high leverage point i.e. 17th index
+OLS1.highlev = lm(Stack.Loss[-17] ~ Acid.Conc.c[-17], data = dat)
+summary(OLS1.highlev)
+
+abline(OLS1, lwd = 2, col = "blue")
+abline(OLS1.highlev, lwd = 2, col = "red")
+legend("topleft", 
+       legend=c("lm with all points", "lm without high leverage point"),
+       col=c("blue", "red"), lty=1:2, cex=0.8)
+```
+
+The highest leverage point is highlighted by the dark red square. It has a significantly lower value of acid concentration than the rest of the observations. However, excluding the highest leverage point does not significantly affect the slope, it only slightly increases it. The slope using all points is 0.7590 while the slope excluding the high-leverage point is 0.8139.
+
+### Problem 1E
+
+```{r}
+B = 1000  # bootstrap simulations
+n = dim(dat)[1]
+p = 1
+level = 0.95
+slopes_boot = rep(NA, B)
+t1_boot = rep(NA, B)
+
+slope = OLS1$coefficients[2]
+se_slope = summary(OLS1)$coefficients[,2][2]
+
+for (i in 1:B) {
+  indices = sample(1:n, n, replace=TRUE)
+  x_boot = Acid.Conc.c[indices]
+  y_boot = dat$Stack.Loss[indices]
+  
+  model = lm(y_boot ~ x_boot)
+  slopes_boot[i] = model$coefficients[2]
+  se_slope_boot = summary(model)$coefficients[,2][2]
+  t1_boot[i] = (slopes_boot[i] - slope) / (se_slope_boot)
+} 
+
+se_boot = sd(slopes_boot)  # bootstrap standard error
+ci_boot = matrix(c(slope + 
+                     quantile(t1_boot, c((1-level)/2,(1+level)/2))*se_slope),
+                 ncol = 2)
+colnames(ci_boot) = c('2.5 %','97.5 %')  # bootstrap CI
+
+cat('Bootstrap Standard Error for Slope\n')
+se_boot
+cat('\n')
+cat('OLS Standard Error for Slope\n')
+se_slope
+cat('\n')
+cat('Bootstrap CI for Slope\n')
+ci_boot
+cat('\n')
+cat('OLS CI for Slope\n')
+confint(OLS1)[2,]
+```
+
+The bootstrap standard error for slope is lower than the OLS one. The bootstrap CI for slope is narrower than the OLS one.
+
+Bootstrapping performs better with larger sample sizes since with more samples, we learn more about the original distribution. Bootstrapping also does not make any assumptions about the underlying distribution. Previously, we saw that the OLS assumptions were violated. Hence, we can not trust the standard OLS estimates of standard error and confidence interval for the slope parameter. We expect the bootstrap estimates to be better. However, we must note that within the bootstrap simulations we are fitting a linear model by least squares which also requires the OLS assumptions. Hence, the bootstrap estimates are also not accurate.
+
+### Problem 2A
+
+```{r}
+OLS.mult = lm(Stack.Loss ~ Air.Flow + Water.Temp + Acid.Conc, data = dat)
+summary(OLS.mult)
+```
+
+```{r}
+# 1. errors have zero mean
+plot(OLS.mult, which=1, pch=16)  # residuals vs. fitted values
+avPlots(OLS.mult)  # added variable: regressing out other variables
+```
+
+The mean zero assumption is violated. The residuals vs. fitted values plot is clearly not centered around zero nor scattered evenly. We see a quadratic shape. This indicates that the errors do not have mean zero. This differs from Problem 1C as we only observed a slight deviance from the horizontal line at 0. The added variable plots show that Air.Flow and Water.Temp seem to have good linear fits (except for a few outliers), but Acid.Conc is a bit spread out from the line.
+
+```{r}
+# 2. errors have equal variance i.e. homoscedasticity
+plot(OLS.mult, which=3, cex=1, pch=16)  # scale location
+residualPlots(OLS.mult)  # partial residual: looking at one variable
+```
+
+The homoscedasticity assumption is violated. We see a fan shape in the residuals vs. fitted values plot. When looking at the variables separately, we particularly see a fan shape for Air.Flow and Acid.Conc. For Water.Temp, we see a curvature indicating the errors are not evenly scattered around mean zero. Also, in the scale-location plot the standardized residuals do not form a horizontal line. This is similar to Problem 1C as we also found that the assumption was violated there.
+
+```{r}
+# 3. errors are normally distributed
+hist(OLS.mult$residuals)
+qqPlot(OLS.mult$residuals, cex=1, pch=16)  # q-q plot
+```
+
+The histogram contains a gap at the lower end of the residuals but is otherwise not too far off from being normal. The q-q plot shows that all the points lie within the confidence band indicating that the errors are normally distributed. This differs from Problem 1C as there were several points that did not fit into the band and hence we concluded that the assumption was violated. However, since we already concluded for this case that the mean zero and homoscedasticity assumptions were violated, it follows that the errors are not normally distributed with mean zero and equal variance.
+
+### Problem 2B
+
+```{r}
+# multicollinearity
+
+# checking via pairwise correlations b/w predictors
+dat_X = scale(dat[-4]) 
+round( cor(dat_X) , 2) # rounded to 2 digits
+
+# checking via variance inflation factors (VIF)
+plot(vif(OLS.mult), type='h', lwd=3)
+abline(h = 10, lty=2) # threshold for suspects 
+
+# checking via condition indices
+C = cor(dat_X) # correlation matrix for the predictors
+L = eigen(C) # eigenvalues  
+K = max(L$val)/L$val # condition indices
+plot(K, type='h', lwd=3)
+abline(h = 1000, lty=2) # threshold for suspects 
+```
+
+Looks like multicollinearity is not an issue. None of the correlations in the map have absolute value above 0.8 (although Air.Flow and Water.Temp are on the border of being concerned about). In addition, for each variable the VIF stays below 10 and the condition number below 1000.
+
+We must check for multicollinearity because serveral issues arise if the linear predictors are nearly dependent:
+
+-   interpretation is difficult
+-   the coefficient estimates have large variances
+-   the fit is numerically unstable since $X^TX$ is almost singular
+
+### Problem 2C
+
+```{r}
+# best subset regression model via Cp
+L = leaps(dat[-4], dat[,4])
+ind = which.min(L$Cp)
+plot(L$size,L$Cp)
+points(L$size[ind],L$Cp[ind],col = 'darkred',pch = 19)
+points(aggregate(L$Cp, by = list(L$size), min),lwd = 2,col = 'darkred',type = 'b',pch = 19)
+
+# best model selected
+names(dat[-4])[L$which[ind,]] 
+```
+
+```{r}
+# best subset via LASSO
+lasso.fit = lars(x = model.matrix(OLS.mult)[,-1], y = dat[,4], normalize=FALSE, intercept=TRUE)
+plot(lasso.fit, lwd=2)
+```
+
+```{r}
+# best model selected
+lasso.fit$actions
+lasso.fit$Cp
+
+# With 2 variables, we get the lowest Cp at 2.98, meaning the best model selected is Air.Flow + Water.Temp
+```
+
+Both methods choose the model $Stack.Loss \sim Air.Flow + Water.Temp$. This was expected because when we ran the summary of the OLS, Acid.Conc did not have a low enough p-value indicating that the variable is not significant to the model. Also, when looking at the added variable plots, Air.Flow and Water.Temp seemed to have a stronger linear relationship to Stack.Loss, so it would be sufficient to keep these predictors and drop Acid.Conc.
+
+### Problem 3A
+
+```{r}
+BackwardPath <- function(x, y) {
+  
+  n = dim(x)[1]  # num of observations
+  k = dim(x)[2]  # num of predictors
+  all_best_AICs = rep(NA, k+1)
+  names(all_best_AICs) = k:0
+  all_best_coefs = list()
+  
+  # full model
+  fit = lm(y ~ ., data = x)
+  y_pred = predict(fit)
+  all_best_coefs[1] = list(fit$coefficients)
+  RSS = sum((y - y_pred) ^ 2)
+  all_best_AICs[1] = n * log(RSS / n) + 2 * k
+  
+  for(i in k:1){
+    
+    # fit all models with i - 1 predictors
+    candidates = combn(1:k, i - 1, simplify = FALSE)
+    candidate_AICs = rep(NA, length(candidates))
+    candidate_coefs = list()
+    
+    for(j in 1:length(candidates)) {
+      
+      if(i - 1 == 0) {
+        fit = lm(y ~ 1)
+      } else {
+        current_features = unlist(candidates[j])
+        fit = lm(y ~ ., data = data.frame(x[current_features]))        
+      }
+      y_pred = predict(fit)
+      candidate_coefs[j] = list(fit$coefficients)
+      
+      RSS = sum((y - y_pred) ^ 2)
+      candidate_AICs[j] = n * log(RSS / n) + 2 * (i - 1)
+    }
+    
+    all_best_AICs[k-i+2] = min(candidate_AICs)
+    all_best_coefs[k-i+2] = candidate_coefs[which.min(candidate_AICs)]
+  }
+  
+  return(list(all_best_AICs = all_best_AICs, all_best_coefs = all_best_coefs))
+}
+```
+
+```{r}
+# testing
+x = dat[, -which(names(dat) %in% c("Stack.Loss"))]
+y = dat$Stack.Loss
+coeffPath = BackwardPath(x, y)
+coeffPath$all_best_AICs
+coeffPath$all_best_coefs
+```
+
+### Problem 3B
+
+```{r}
+BackwardVisualize <- function(coeffPath) {
+  AICs = coeffPath$all_best_AICs
+  coefs = coeffPath$all_best_coefs
+  predictors = (length(coefs) - 1):0
+  
+  # plot coefs for each of the predictors vs. # of predictors
+  for(i in 1:length(coeffPath$all_best_coefs)) {
+    num_coefs = length(coeffPath$all_best_coefs[[i]])
+    if(i==1){
+      plot(rep(num_coefs, num_coefs), 
+           coeffPath$all_best_coefs[[i]],
+           xlab="number of predictors + intercept",
+           ylab="coefficient values for best model",
+           xlim=c(1,num_coefs),
+           ylim=c(-8,8))
+    } else {
+      points(rep(num_coefs, num_coefs), 
+             coeffPath$all_best_coefs[[i]])
+    }
+  }
+  
+  # plot AIC vs. # of predictors
+  plot(predictors, AICs, 
+       xlab="# of predictors", ylab="best AIC for subset", pch=16)
+}
+```
+
+### Problem 3C
+
+```{r}
+x = dat[, -which(names(dat) %in% c("Stack.Loss"))]
+y = dat$Stack.Loss
+coeffPath = BackwardPath(x, y)
+BackwardVisualize(coeffPath)
+```
+
+The best subset regression model according to this algorithm is $Stack.Loss \sim Air.Flow + Water.Temp$ because the AIC value is lowest with 2 predictors and we can see which 2 predictors those are via the coefficient list variable. This is exactly the same result that we saw in Problem 2C.
+
+### Problem 4A
+
+```{r}
+n = nrow(dat)
+x = matrix(runif(n*5, -1, 1), nrow=n)
+colnames(x) = c("x1", "x2", "x3", "x4", "x5")
+dat_junk = cbind(dat, x)
+
+fit = lm(Stack.Loss ~ ., data = dat_junk)
+summary(fit)
+```
+
+### Problem 4B
+
+```{r}
+# repeat problem 2C
+X = dat_junk[, -which(names(dat_junk) %in% c("Stack.Loss"))]
+y = dat_junk$Stack.Loss
+
+# best subset regression model via Cp
+L = leaps(X, y)
+ind = which.min(L$Cp)
+plot(L$size,L$Cp)
+points(L$size[ind],L$Cp[ind],col = 'darkred',pch = 19)
+points(aggregate(L$Cp, by = list(L$size), min),lwd = 2,col = 'darkred',type = 'b',pch = 19)
+
+# best model selected
+names(X)[L$which[ind,]] 
+```
+
+```{r}
+# repeat problem 2C
+
+# best subset via LASSO
+lasso.fit = lars(x = model.matrix(fit)[,-1], y = y, normalize=FALSE, intercept=TRUE)
+plot(lasso.fit, lwd=2)
+
+# best model selected
+lasso.fit$actions
+lasso.fit$Cp
+
+# model with 2 variables has min Cp, hence we look at the first 2 actions which are Air.Flow and Water.Temp
+```
+
+Repeating Problem 2C via Cp on subset regression models and on subset LASSO fits, we get the same variable selection: Air.Flow + Water.Temp. Hence, the junk variables do not mess up the variable selection.
+
+```{r}
+# repeat problem 3C
+
+coeffPath = BackwardPath(X, y)
+BackwardVisualize(coeffPath)
+```
+
+```{r}
+min(coeffPath$all_best_AICs)
+coeffPath$all_best_coefs[which.min(coeffPath$all_best_AICs)]
+```
+
+Repeating Problem 3C via the BackwardPath algorithm, we get a different variable selection: Air.Flow + Water.Temp + Acid.Conc + x2 + x3. Hence, the junk variables mess up the variable selection. Compared to 2C, we now have three more variables in the model, two of which are junk and one of which was excluded after looking at subsets and concluding that Acid.Conc does not help the model prediction.
+
+However, we do see from the plot of best AIC values vs. \# of predictors that when the number of predictors is two, the AIC is quite close to the minimum AIC. In this case, we would have selected the same variables Air.Flow + Water.Temp.
+
+### Problem 4C
+
+```{r}
+n = nrow(dat)
+pred_count_leaps = rep(0, ncol(X))  # all subset lm
+pred_count_lasso = rep(0, ncol(X))  # lasso
+pred_count_bp = rep(0, ncol(X))  # BackwardPath
+names(pred_count_leaps) = colnames(X)
+names(pred_count_lasso) = colnames(X)
+names(pred_count_bp) = colnames(X)
+
+for(i in 1:100) {
+  # generate junk variables and add to X
+  x = matrix(runif(n*5, -1, 1), nrow=n)
+  colnames(x) = c("x1", "x2", "x3", "x4", "x5")
+  dat_junk = cbind(dat, x)
+  X = dat_junk[, -which(names(dat_junk) %in% c("Stack.Loss"))]
+  y = dat_junk$Stack.Loss
+  
+  # perform best subset regression model via Cp and record predictors selected
+  L = leaps(X, y)
+  ind = which.min(L$Cp)
+  predictors = names(X)[L$which[ind,]] 
+  for(predictor in predictors) {
+    pred_count_leaps[predictor] = pred_count_leaps[predictor] + 1 
+  }
+  
+  # perform best subset via LASSO
+  fit = lm(y ~ ., data = X)
+  lasso.fit = lars(x = model.matrix(fit)[,-1], y = y, normalize=FALSE, intercept=TRUE)
+  actions = names(unlist(lasso.fit$actions))
+  predictors = actions[1:(which.min(lasso.fit$Cp) - 1)]
+  for(predictor in predictors) {
+    pred_count_lasso[predictor] = pred_count_lasso[predictor] + 1 
+  }
+  
+  # perform backward path and record predictors selected
+  coeffPath = BackwardPath(X, y)
+  coefs = coeffPath$all_best_coefs[which.min(coeffPath$all_best_AICs)]
+  predictors = names(unlist(coefs))[-1]
+  for(predictor in predictors) {
+    pred_count_bp[predictor] = pred_count_bp[predictor] + 1 
+  }
+}
+```
+
+```{r}
+barplot(pred_count_leaps, 
+        main="Frequency of Predictors Selected by Cp Over All Subset Reg Models", 
+        cex.names=0.6, cex.main=1)
+
+barplot(pred_count_lasso, 
+        main="Frequency of Predictors Selected by Cp Over LASSO Fits", 
+        cex.names=0.6, cex.main=1)
+
+barplot(pred_count_bp, 
+        main="Frequency of Predictors Selected by BackwardPath", 
+        cex.names=0.6, cex.main=1)
+```
+
+All three methods include the junk variables in their "best" model at some point. The BackwardPath algorithm includes them the most at around 20-30% of the simulations and LASSO algorithm includes them the least at around 10-20% of the simulations. This makes sense, as LASSO penalization encourages coefficient estimates to go to zero, so it favors models with less variables.
+
+All three methods include Air.Flow and Water.Temp every time, so although junk variables are included, the significant variables are never excluded.
+
+We also see that none of the variables were left out completely; so all 8 variables were included in the "best" model at some point.
